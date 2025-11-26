@@ -9,6 +9,9 @@ on:
   pull_request:
   schedule:
     - cron:  '0 3 * * *'        # nightly safety net (03:00 UTC)
+permissions:
+  contents: read
+  issues: write
 
 jobs:
   # ─────────────────────────────────────────────────────────────
