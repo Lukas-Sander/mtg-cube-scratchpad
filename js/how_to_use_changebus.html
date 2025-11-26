@@ -1,0 +1,39 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<!-- index.html (or popup.html) -->
+<script src="changeBus.js"></script>
+<script>
+    //TODO: inspect AI code, remove sample as soon as working implementation exists
+    // Example: current cube ID this view cares about
+    const currentCubeId = 7;
+
+    /* 1. React to notifications from other windows/iframes */
+    ChangeBus.onChange(async (msg) => {
+        if (msg.scope === 'cube' && msg.id === currentCubeId) {
+            console.log('Cube changed in another window, reloading…');
+            await reloadCubeFromIndexedDB(currentCubeId);
+        }
+        if (msg.scope === 'global') {
+            console.log('Global data changed, refresh UI.');
+            refreshEverything();
+        }
+    });
+
+    /* 2. After you modify data locally, signal others */
+    async function renameCube(newName) {
+        const cube = await getCubeFromDB(currentCubeId);
+        cube.name = newName;
+        await saveCubeToDB(cube);
+
+        ChangeBus.touchCube(currentCubeId);   // notifies everyone (incl. us)
+    }
+</script>
+
+</body>
+</html>
