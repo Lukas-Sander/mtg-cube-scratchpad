@@ -42,16 +42,24 @@ jobs:
       - name: Build report of offending files
         id: report
         run: |
-          ROOT="js"                       
+          ROOT="js"                           # change as needed
           OUT=.github/_strict_report.md
-          echo "" > $OUT
+          : > "$OUT"                           # truncate/create the file
+  
+          # collect offending files
           while IFS= read -r -d '' f; do
             first=$(head -n1 "$f" | tr -d '[:space:]')
             if [[ "$first" != "'usestrict';" && "$first" != "\"usestrict\";" ]]; then
-              echo "- $f (missing 'use strict')" >> $OUT
+              echo "- $f (missing 'use strict')" >> "$OUT"
             fi
           done < <(find "$ROOT" -type f -name "*.js" -print0)
-          echo "has_issues=$(if [ -s $OUT ]; then echo true; else echo false; fi)" >> $GITHUB_OUTPUT
+  
+          # expose output for later steps
+          if [ -s "$OUT" ]; then
+            echo "has_issues=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "has_issues=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Open / update GitHub issue
         if: steps.report.outputs.has_issues == 'true'
