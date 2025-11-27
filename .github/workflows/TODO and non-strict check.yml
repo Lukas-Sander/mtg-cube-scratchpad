@@ -2,9 +2,9 @@
 name: Code-hygiene report
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
+  schedule:
+    - cron:  '0 3 * * *'
 
 permissions:
   contents: read
@@ -19,31 +19,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ------------ 1. Build the report ------------
+      # ---------- 1. Build the report ----------
       - id: scan
         run: |
           set -euo pipefail
           REPORT=.github/hygiene_report.md
           : > "$REPORT"
           
-          echo "## TODO / FIXME" >> "$REPORT"
+          echo '## TODO / FIXME' >> "$REPORT"
           todo_found=false
-          grep -RInE \
-               --exclude-dir={.git,.github,node_modules,third_party} \
-               --exclude='*.md' \
-               'TODO|FIXME' . | \
+
           while IFS=: read -r file line rest; do
             todo_found=true
-            file=${file#./}                                # drop leading ./
+            file=${file#./}   # trim leading ./
             printf -- "- [`%s:%s`](%s/%s#L%s) %s\n" \
-               "$file" "$line" "$BASE_URL" "$file" "$line" "$(echo "$rest" | sed 's/^ *//')" \
-               >> "$REPORT"
-          done || true
-          $todo_found || echo "_No TODO/FIXME found_" >> "$REPORT"
+              "$file" "$line" "$BASE_URL" "$file" "$line" \
+              "$(echo "$rest" | sed 's/^ *//')" >> "$REPORT"
+          done < <(
+            grep -RInE \
+              --exclude-dir={.git,.github,node_modules,third_party} \
+              --exclude='*.md' \
+              'TODO|FIXME' .
+          ) || true
           
-          echo -e "\n## JS files missing 'use strict'" >> "$REPORT"
+          $todo_found || echo '_No TODO/FIXME found_' >> "$REPORT"
+
+          echo -e '\n## JS files missing '\''use strict'\''' >> "$REPORT"
           strict_found=false
-          find js -type f -name '*.js' ! -path './.github/*' -print0 2>/dev/null |
+
           while IFS= read -r -d '' f; do
             first=$(head -n1 "$f" | tr -d '[:space:]')
             if [[ "$first" != "'usestrict';" && "$first" != "\"usestrict\";" ]]; then
@@ -51,17 +54,19 @@ jobs:
               f=${f#./}
               printf -- "- [`%s`](%s/%s)\n" "$f" "$BASE_URL" "$f" >> "$REPORT"
             fi
-          done
-          $strict_found || echo "_All clear_" >> "$REPORT"
+          done < <(find js -type f -name '*.js' ! -path './.github/*' -print0 2>/dev/null)
+
+          $strict_found || echo '_All clear_' >> "$REPORT"
 
           cat "$REPORT"
 
-      # ------------ 2. Create or update the tracker issue ------------
-      - name: Create / update single hygiene issue
+      # ---------- 2. Create or update the single tracker issue ----------
+      - name: Create / update hygiene issue
         run: |
           set -euo pipefail
           TITLE="Code-hygiene report"
           LABEL="hygiene"
+          FILE=".github/hygiene_report.md"
 
           NUM=$(gh issue list --state all --label "$LABEL" \
                  --search "$TITLE in:title" \
@@ -70,18 +75,18 @@ jobs:
           if [[ -n "$NUM" ]]; then
               echo "Updating existing issue #$NUM"
             gh issue edit "$NUM" \
-              --body-file ".github/hygiene_report.md" \
+              --body-file "$FILE" \
               --add-label "$LABEL"
               gh issue reopen "$NUM" || true
           else
               echo "Creating new issue"
               gh issue create --title "$TITLE" \
                               --label "$LABEL" \
-                              --body-file ".github/hygiene_report.md"
+              --body-file "$FILE"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # ------------ 3. Echo summary in the UI ------------
+      # ---------- 3. Copy report into the job summary ----------
       - name: Add report to summary
-        run: cat .github/hygiene_report.md >> $GITHUB_STEP_SUMMARY
+        run: cat .github/hygiene_report.md >> "$GITHUB_STEP_SUMMARY"
