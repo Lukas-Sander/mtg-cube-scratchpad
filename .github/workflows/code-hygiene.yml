@@ -3,49 +3,53 @@ name: Code hygiene – TODO & 'use strict' audit
 
 on:
   push:
-    branches: [ main ]          
-    paths-ignore:
-      - '**.md'                 # optional: skip docs-only commits
-  pull_request:
+    branches: [ main ]
+    paths-ignore: [ '**.md' ]
+  pull_request:                       # still run lint on PRs
   schedule:
-    - cron:  '0 3 * * *'        # nightly safety net (03:00 UTC)
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
 permissions:
   contents: read
-  issues: write
+  issues:   write                     # both actions need this
+
+env:
+  ROOT_JS_FOLDER: js                  # change if needed
 
 jobs:
-  # ─────────────────────────────────────────────────────────────
+# ───────────────────────── TODO / FIXME ─────────────────────────
   todo_issues:
-    name: Create issues from TODO / FIXME
+    # Only open / close issues when token is writable
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Convert TODO comments to issues
+      - name: Manage TODO / FIXME issues
         uses: alstr/todo-to-issue-action@v4
         with:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COMMENT_MARKER: 'TODO|FIXME'    # regex OR
+          COMMENT_MARKER: 'TODO|FIXME'   # regex OR
           LABEL: 'todo'
           CLOSE_ISSUES: true
-          IGNORE: |                       # paths to skip (.gitignore-style)
+          IGNORE: |
+            node_modules/**
             third_party/**
-  # ─────────────────────────────────────────────────────────────
+          NO_STANDARD: true              # prevents failure on read-only tokens
+
+# ─────────────────────── 'use strict' audit ─────────────────────
   strict_audit:
-    name: Ensure 'use strict' in JS entry lines
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Build report of offending files
-        id: report
+      - id: report
         run: |
-          ROOT="js"                           # change as needed
+          ROOT="$ROOT_JS_FOLDER"
           OUT=.github/_strict_report.md
-          : > "$OUT"                           # truncate/create the file
-  
+          : > "$OUT"
+
           find "$ROOT" -type f -name "*.js" -print0 |
           while IFS= read -r -d '' f; do
             first=$(head -n1 "$f" | tr -d '[:space:]')
@@ -56,13 +60,14 @@ jobs:
 
           echo "has_issues=$( [ -s $OUT ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
 
-      - name: Open / update GitHub issue
-        if: steps.report.outputs.has_issues == 'true'
-        uses: peter-evans/create-issue-from-file@v6
+      # Create / update the tracker only when we CAN write issues
+      - name: Create / update tracking issue
+        if: github.event_name != 'pull_request' && steps.report.outputs.has_issues == 'true'
+        uses: peter-evans/create-issue-from-file@v6       # ← upgrade
         with:
-          title: "JavaScript files without 'use strict'"
-          content-filepath: .github/_strict_report.md
           token: ${{ secrets.GITHUB_TOKEN }}
+          title: "JavaScript files missing 'use strict'"
+          content-filepath: .github/_strict_report.md
           labels: lint,missing-use-strict,automated
-          issue-number: 0          # reuse open issue with same title
-          reopen-closed: true      # reopen instead of creating a new one
+          issue-number: 0
+          reopen-closed: true
