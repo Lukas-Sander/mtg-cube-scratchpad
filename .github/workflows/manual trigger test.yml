@@ -1,76 +1,28 @@
-# .github/workflows/code-hygiene.yml
-name: Bare-bones code hygiene
+name: Hygiene-check (no side-effects)
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:        # manual trigger when you want
-
-permissions:
-  contents: read            # required for checkout
-  issues:   write           # needed for gh issue create / edit
+  # push:
+    # branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  hygiene:
+  scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # ---------- Scan the repo ----------
-      - id: scan
+      - name: Scan TODO / FIXME and 'use strict'
         run: |
-          WORKDIR="$PWD"
-          TODO_FILE="$WORKDIR/.github/_todo_report.md"
-          STRICT_FILE="$WORKDIR/.github/_strict_report.md"
-          : > "$TODO_FILE"
-          : > "$STRICT_FILE"
+          set -euo pipefail
+          echo "## TODO / FIXME" >> $GITHUB_STEP_SUMMARY
+          if ! grep -RInE --exclude-dir={.git,node_modules,third_party} 'TODO|FIXME' .; then
+            echo "_No TODO/FIXME found_" >> $GITHUB_STEP_SUMMARY
+          fi | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
 
-          # 1) find TODO / FIXME
-          grep -RnI --exclude-dir={.git,node_modules,third_party} -E 'TODO|FIXME' . \
-            | while IFS=: read -r file line rest; do
-                echo "- [$file:$line] $(echo "$rest" | sed 's/^ *//')" >> "$TODO_FILE"
-              done
-
-          # 2) find JS without 'use strict'
-          find js -type f -name '*.js' -print0 2>/dev/null |
-          while IFS= read -r -d '' f; do
-            first=$(head -n1 "$f" | tr -d '[:space:]')
-            [[ "$first" =~ ^(\'usestrict\';|\"usestrict\";) ]] || echo "- $f" >> "$STRICT_FILE"
-          done
-
-          echo "todo_nonempty=$( [[ -s $TODO_FILE ]] && echo true || echo false )" >> $GITHUB_OUTPUT
-          echo "strict_nonempty=$( [[ -s $STRICT_FILE ]] && echo true || echo false )" >> $GITHUB_OUTPUT
-
-      # ---------- Create / update TODO issues ----------
-      - name: Create / update TODO tracker
-        if: steps.scan.outputs.todo_nonempty == 'true'
-        run: |
-          gh issue list --state all --label todo --search "TODO tracker in:title" --json number,state | \
-          jq -r '.[0] // empty' > issue.json
-
-          if [[ -s issue.json ]]; then
-            num=$(jq '.number' issue.json)
-            gh issue edit "$num" --add-label todo --title "TODO tracker" --body-file ".github/_todo_report.md"
-            [[ $(jq -r '.state' issue.json) == "CLOSED" ]] && gh issue reopen "$num"
+          echo -e "\n## JS files missing 'use strict'" >> $GITHUB_STEP_SUMMARY
+          missing=$(find js -type f -name '*.js' -exec awk 'FNR==1 {gsub(/[[:space:]]/, "", $0); if ($0 !~ /^('\''usestrict'\'';|"usestrict";)/) print FILENAME}' {} +)
+          if [[ -z "$missing" ]]; then
+            echo "_All clear_" >> $GITHUB_STEP_SUMMARY
           else
-            gh issue create --title "TODO tracker" --label todo --body-file ".github/_todo_report.md"
+            printf '%s\n' "$missing" | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
           fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # ---------- Create / update 'use strict' issues ----------
-      - name: Create / update use-strict tracker
-        if: steps.scan.outputs.strict_nonempty == 'true'
-        run: |
-          gh issue list --state all --label lint --search "Missing 'use strict' in:title" --json number,state | \
-          jq -r '.[0] // empty' > issue.json
-
-          if [[ -s issue.json ]]; then
-            num=$(jq '.number' issue.json)
-            gh issue edit "$num" --add-label lint --title "Missing 'use strict'" --body-file ".github/_strict_report.md"
-            [[ $(jq -r '.state' issue.json) == "CLOSED" ]] && gh issue reopen "$num"
-          else
-            gh issue create --title "Missing 'use strict'" --label lint --body-file ".github/_strict_report.md"
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
