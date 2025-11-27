@@ -1,0 +1,76 @@
+# .github/workflows/hygiene-report.yml
+name: Code-hygiene report
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues:   write        # allows gh to create / edit issues
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ------------ 1. Build the report ------------
+      - id: scan
+        run: |
+          set -euo pipefail
+          REPORT=.github/hygiene_report.md
+          : > "$REPORT"
+
+          echo "## TODO / FIXME" >> "$REPORT"
+          found_todos=false
+          grep -RInE --exclude-dir={.git,node_modules,third_party} 'TODO|FIXME' . \
+          | while IFS=: read -r f l rest; do
+              found_todos=true
+              echo "- [$f:$l] $(echo "$rest" | sed 's/^ *//')" >> "$REPORT"
+            done || true
+          $found_todos || echo "_No TODO/FIXME found_" >> "$REPORT"
+
+          echo -e "\n## JS files missing 'use strict'" >> "$REPORT"
+          missing=$(find js -type f -name '*.js' -print0 2>/dev/null \
+                     | while IFS= read -r -d '' f; do
+                         first=$(head -n1 "$f" | tr -d '[:space:]')
+                         [[ "$first" =~ ^(\"usestrict\";|'usestrict';) ]] || echo "$f"
+                       done)
+          if [[ -z "$missing" ]]; then
+            echo "_All clear_" >> "$REPORT"
+          else
+            printf '%s\n' "$missing" | sed 's/^/- /' >> "$REPORT"
+          fi
+
+          cat "$REPORT"        # nice to have in raw logs
+
+      # ------------ 2. Create or update the tracker issue ------------
+      - name: Create / update single hygiene issue
+        run: |
+          set -euo pipefail
+          TITLE="Code-hygiene report"
+          LABEL="hygiene"
+
+          # look for an existing issue (open *or* closed)
+          NUM=$(gh issue list --state all --label "$LABEL" \
+                 --search "$TITLE in:title" \
+                 --json number --jq '.[0].number' || echo "")
+
+          if [[ -n "$NUM" ]]; then
+              echo "Updating existing issue #$NUM"
+              gh issue edit "$NUM" --body-file ".github/hygiene_report.md" --add-label "$LABEL"
+              gh issue reopen "$NUM" || true
+          else
+              echo "Creating new issue"
+              gh issue create --title "$TITLE" \
+                              --label "$LABEL" \
+                              --body-file ".github/hygiene_report.md"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ------------ 3. Echo summary in the UI ------------
+      - name: Add report to summary
+        run: cat .github/hygiene_report.md >> $GITHUB_STEP_SUMMARY
