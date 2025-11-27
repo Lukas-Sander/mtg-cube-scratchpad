@@ -8,7 +8,10 @@ on:
 
 permissions:
   contents: read
-  issues:   write        # allows gh to create / edit issues
+  issues:   write
+
+env:
+  BASE_URL: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}
 
 jobs:
   hygiene:
@@ -22,29 +25,36 @@ jobs:
           set -euo pipefail
           REPORT=.github/hygiene_report.md
           : > "$REPORT"
-
+          
           echo "## TODO / FIXME" >> "$REPORT"
-          found_todos=false
-          grep -RInE --exclude-dir={.git,node_modules,third_party} 'TODO|FIXME' . \
-          | while IFS=: read -r f l rest; do
-              found_todos=true
-              echo "- [$f:$l] $(echo "$rest" | sed 's/^ *//')" >> "$REPORT"
-            done || true
-          $found_todos || echo "_No TODO/FIXME found_" >> "$REPORT"
-
+          todo_found=false
+          grep -RInE \
+               --exclude-dir={.git,.github,node_modules,third_party} \
+               --exclude='*.md' \
+               'TODO|FIXME' . | \
+          while IFS=: read -r file line rest; do
+            todo_found=true
+            file=${file#./}                                # drop leading ./
+            printf -- "- [`%s:%s`](%s/%s#L%s) %s\n" \
+               "$file" "$line" "$BASE_URL" "$file" "$line" "$(echo "$rest" | sed 's/^ *//')" \
+               >> "$REPORT"
+          done || true
+          $todo_found || echo "_No TODO/FIXME found_" >> "$REPORT"
+          
           echo -e "\n## JS files missing 'use strict'" >> "$REPORT"
-          missing=$(find js -type f -name '*.js' -print0 2>/dev/null \
-                     | while IFS= read -r -d '' f; do
-                         first=$(head -n1 "$f" | tr -d '[:space:]')
-                         [[ "$first" =~ ^(\"usestrict\";|'usestrict';) ]] || echo "$f"
-                       done)
-          if [[ -z "$missing" ]]; then
-            echo "_All clear_" >> "$REPORT"
-          else
-            printf '%s\n' "$missing" | sed 's/^/- /' >> "$REPORT"
-          fi
+          strict_found=false
+          find js -type f -name '*.js' ! -path './.github/*' -print0 2>/dev/null |
+          while IFS= read -r -d '' f; do
+            first=$(head -n1 "$f" | tr -d '[:space:]')
+            if [[ "$first" != "'usestrict';" && "$first" != "\"usestrict\";" ]]; then
+              strict_found=true
+              f=${f#./}
+              printf -- "- [`%s`](%s/%s)\n" "$f" "$BASE_URL" "$f" >> "$REPORT"
+            fi
+          done
+          $strict_found || echo "_All clear_" >> "$REPORT"
 
-          cat "$REPORT"        # nice to have in raw logs
+          cat "$REPORT"
 
       # ------------ 2. Create or update the tracker issue ------------
       - name: Create / update single hygiene issue
@@ -53,14 +63,15 @@ jobs:
           TITLE="Code-hygiene report"
           LABEL="hygiene"
 
-          # look for an existing issue (open *or* closed)
           NUM=$(gh issue list --state all --label "$LABEL" \
                  --search "$TITLE in:title" \
                  --json number --jq '.[0].number' || echo "")
 
           if [[ -n "$NUM" ]]; then
               echo "Updating existing issue #$NUM"
-              gh issue edit "$NUM" --body-file ".github/hygiene_report.md" --add-label "$LABEL"
+            gh issue edit "$NUM" \
+              --body-file ".github/hygiene_report.md" \
+              --add-label "$LABEL"
               gh issue reopen "$NUM" || true
           else
               echo "Creating new issue"
