@@ -3,12 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <title>MtG Cube Scratchpad</title>
+
+    <!--  global css  -->
     <link rel="stylesheet" href="css/main.css">
-    <script defer src="js/changeBus.js" type="application/javascript"></script>
-    <script defer src="js/view/BaseView.js" type="application/javascript"></script>
-    <script defer src="js/viewLoader.js" type="application/javascript"></script>
+    <link rel="stylesheet" href="third_party/quill/quill.snow.css">
+
+    <!--  third party libs  -->
+    <script defer src="third_party/dexie/dexie.min.js"></script>
+    <script defer src="third_party/quill/quill.js"></script>
+    <script defer src="third_party/sortablejs/Sortable.min.js"></script>
+
+    <!--  multi use controllers  -->
+    <script defer src="js/classes/DatabaseController.js"></script>
+    <script defer src="js/classes/ImportController.js"></script>
+
+    <!--  different view classes  -->
+    <script defer src="js/view/BaseView.js"></script>
+    <script defer src="js/view/CubeView.js"></script>
+    <script defer src="js/view/SettingsView.js"></script>
+
+    <!--  global scripts  -->
+    <script defer src="js/changeBus.js"></script>
+    <script defer src="js/viewLoader.js"></script>
+    <!--    <script defer src="js/main.js"></script>-->
+
+    <style>
+        .progress-container {
+            margin: 20px 0;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #4caf50;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        .progress-text {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
 </head>
 <body>
+<!--<template id="main-view-template">-->
+<h1>MTG Cube Scratchpad - Data Import</h1>
 
+<div>
+    <button id="importBtn">Import Card Data</button>
+    <button id="downloadImagesBtn">Download All Images</button>
+</div>
+
+<div class="progress-container" id="importProgress" style="display: none;">
+    <div class="progress-bar">
+        <div class="progress-fill" id="importProgressFill" style="width: 0;">
+            <span id="importProgressPercent">0%</span>
+        </div>
+    </div>
+    <div class="progress-text" id="importProgressText">Preparing...</div>
+</div>
+
+<div class="progress-container" id="imageProgress" style="display: none;">
+    <div class="progress-bar">
+        <div class="progress-fill" id="imageProgressFill" style="width: 0%;">
+            <span id="imageProgressPercent">0%</span>
+        </div>
+    </div>
+    <div class="progress-text" id="imageProgressText">Preparing...</div>
+</div>
+<!--</template>-->
 </body>
 </html>

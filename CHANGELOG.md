@@ -2,6 +2,11 @@
 - Sections: Hotfixes, Bugfixes, Security, Features Added, Features Updated, Features Removed, Code Optimization, UI/UX
 - major.minor.patch
 
+## [0.0.2] - 2025-11-27
+### Code Optimization
+- more code structuring and planning
+- decided on static loading of all js and css, only needed classes will be instantiated
+
 ## [0.0.1] - 2025-11-26
 ### Code Optimization
 - initial planning start

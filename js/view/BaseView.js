@@ -20,12 +20,8 @@ class BaseView {
     /* root   : DOM element where this view should render
        params : object with query-string data ({ id: 42, card: 17 … })
     */
-    constructor(root, params = {}) {
-        if (!root) {
-            throw new Error('BaseView: root element required');
-        }
-        this.root     = root;
-        this.params   = params;
+    constructor() {
+
         this._unsubs  = [];                      // keep unsubscribe fns
 
         /* Auto-subscribe to ChangeBus if subclass defines onBusMessage() */

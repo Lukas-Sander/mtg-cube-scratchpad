@@ -6,20 +6,21 @@ DISCLAIMER:
 - Large parts of the code will be AI generated (and checked by a human)
 
 ## Plans
-- [ ] automatic versioning upon push to main
-- [ ] automatic version check from local app
+- [x] automatic versioning upon push to main
+- [ ] different views via iframes and/or tabs and popup windows
+  - [ ] communication between views via localstorage
+  - [ ] option to save current views and restore them later (use dexie for this)
+  - [ ] drag and drop between views where it makes sense (e.g. collection -> cube list)
 - [ ] Import/read archidekt Collection
 - [ ] Import scryfall data?
 - [ ] drag and drop from scryfall
-- [ ] Card list Sorter
+- [ ] Card list Sorter project implementation
 - [ ] multiple cube lists
 - [ ] PWA support
 - [ ] if Import from scryfall is possible, offline support -> this also means having to make scryfall queries work offline (against local copy of Card database)
-- [ ] if possible, easy Export to Proxy sites (though probably a text Export works just fine here)
+- [ ] if possible, easy Export to Proxy sites (though a text Export probably works just fine here)
 - [ ] cubecobra formatter
 - [ ] save queries and partial queries
 - [ ] save notes: General + per cube + per card
 - [ ] sorting and filtering inside cube lists
-- [ ] different views via iframes and/or tabs and popup windows
-  - [ ] communication between views via localstorage
-  - [ ] option to save current views and restore them later (use dexie for this)
+- [ ] automatic version check from local app
