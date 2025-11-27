@@ -5,28 +5,25 @@ on:
   push:
     branches: [ main ]
     paths-ignore: [ '**.md' ]
-  pull_request:                       # still run lint on PRs
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
-  issues:   write                     # both actions need this
+  issues:   write          # let the default GITHUB_TOKEN open / edit issues
 
 env:
-  ROOT_JS_FOLDER: js                  # change if needed
+  JS_ROOT: js              # change to your JS source folder
 
 jobs:
-# ───────────────────────── TODO / FIXME ─────────────────────────
+# ─────────────── 1) TODO / FIXME → issues ───────────────
   todo_issues:
-    # Only open / close issues when token is writable
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Manage TODO / FIXME issues
+      - name: Create / close TODO issues
         uses: alstr/todo-to-issue-action@v4
         with:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -36,38 +33,32 @@ jobs:
           IGNORE: |
             node_modules/**
             third_party/**
-          NO_STANDARD: true              # prevents failure on read-only tokens
 
-# ─────────────────────── 'use strict' audit ─────────────────────
+# ─────────────── 2) 'use strict' tracker ───────────────
   strict_audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - id: report
+      - id: build_report
         run: |
-          ROOT="$ROOT_JS_FOLDER"
           OUT=.github/_strict_report.md
           : > "$OUT"
-
-          find "$ROOT" -type f -name "*.js" -print0 |
-          while IFS= read -r -d '' f; do
-            first=$(head -n1 "$f" | tr -d '[:space:]')
+          find "$JS_ROOT" -type f -name '*.js' -print0 |
+          while IFS= read -r -d '' file; do
+            first=$(head -n1 "$file" | tr -d '[:space:]')
             if [[ "$first" != "'usestrict';" && "$first" != "\"usestrict\";" ]]; then
-              echo "- $f" >> "$OUT"
+              echo "- $file" >> "$OUT"
             fi
           done
+          echo "HAS_ISSUES=$( [[ -s $OUT ]] && echo true || echo false )" >> $GITHUB_ENV
 
-          echo "has_issues=$( [ -s $OUT ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
-
-      # Create / update the tracker only when we CAN write issues
       - name: Create / update tracking issue
-        if: github.event_name != 'pull_request' && steps.report.outputs.has_issues == 'true'
-        uses: peter-evans/create-issue-from-file@v6       # ← upgrade
+        if: env.HAS_ISSUES == 'true'
+        uses: peter-evans/create-issue-from-file@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           title: "JavaScript files missing 'use strict'"
           content-filepath: .github/_strict_report.md
           labels: lint,missing-use-strict,automated
-          issue-number: 0
-          reopen-closed: true
+          issue-number: 0          # 0 = reuse open issue with same title
