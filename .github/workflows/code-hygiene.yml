@@ -26,12 +26,10 @@ jobs:
         uses: alstr/todo-to-issue-action@v4
         with:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEBUG_LOG: true
-          OPEN_ISSUES: true                 # open new issues
-          CLOSE_ISSUES: true                # auto-close when TODO removed
-          COMMENT_MARKERS: 'TODO,FIXME'     # customise if needed
+          COMMENT_MARKER: 'TODO|FIXME'    # regex OR
           LABEL: 'todo'
-          EXCLUDED_FILES: |
+          CLOSE_ISSUES: true
+          IGNORE: |                       # paths to skip (.gitignore-style)
             third_party/**
   # ─────────────────────────────────────────────────────────────
   strict_audit:
@@ -48,27 +46,23 @@ jobs:
           OUT=.github/_strict_report.md
           : > "$OUT"                           # truncate/create the file
   
-          # collect offending files
+          find "$ROOT" -type f -name "*.js" -print0 |
           while IFS= read -r -d '' f; do
             first=$(head -n1 "$f" | tr -d '[:space:]')
             if [[ "$first" != "'usestrict';" && "$first" != "\"usestrict\";" ]]; then
-              echo "- $f (missing 'use strict')" >> "$OUT"
+              echo "- $f" >> "$OUT"
             fi
-          done < <(find "$ROOT" -type f -name "*.js" -print0)
-  
-          # expose output for later steps
-          if [ -s "$OUT" ]; then
-            echo "has_issues=true"  >> "$GITHUB_OUTPUT"
-          else
-            echo "has_issues=false" >> "$GITHUB_OUTPUT"
-          fi
+          done
+
+          echo "has_issues=$( [ -s $OUT ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
 
       - name: Open / update GitHub issue
         if: steps.report.outputs.has_issues == 'true'
-        uses: peter-evans/create-issue-from-file@v5
+        uses: peter-evans/create-issue-from-file@v6
         with:
           title: "JavaScript files without 'use strict'"
           content-filepath: .github/_strict_report.md
           token: ${{ secrets.GITHUB_TOKEN }}
-          labels: "lint,missing-use-strict,automated"
-          issue-number: 0                 # 0 = create or update by title
+          labels: lint,missing-use-strict,automated
+          issue-number: 0          # reuse open issue with same title
+          reopen-closed: true      # reopen instead of creating a new one
