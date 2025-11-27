@@ -26,6 +26,7 @@ jobs:
         uses: alstr/todo-to-issue-action@v4
         with:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEBUG_LOG: true
           OPEN_ISSUES: true                 # open new issues
           CLOSE_ISSUES: true                # auto-close when TODO removed
           COMMENT_MARKERS: 'TODO,FIXME'     # customise if needed
@@ -70,3 +71,4 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           labels: "lint,missing-use-strict,automated"
           issue-number: 0                 # 0 = create or update by title
+          reopen-closed: true        # Re-open if someone closed it manually
